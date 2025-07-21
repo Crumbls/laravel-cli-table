@@ -157,6 +157,25 @@ $table->addRow(['2', 'Jane Smith', 'jane@example.com', 'Active']);
 $table->addRow([new TableCell('+ Add New User', ['colspan' => 4])]);
 ```
 
+### Translations
+
+The package includes translatable strings for instructions and messages. Publish the language files:
+
+```bash
+php artisan vendor:publish --tag=cli-table-lang
+```
+
+Then customize the translations in `lang/vendor/cli-table/en/table.php`:
+
+```php
+return [
+    'instructions' => 'Use ↑/↓ arrows to navigate, Enter to select, q/Esc to exit',
+    'selected_row' => 'Selected Row: :current/:total',
+    'selection_cancelled' => 'Selection cancelled',
+    // Add your own translations...
+];
+```
+
 ## Troubleshooting
 
 ### Arrow Keys Not Working?

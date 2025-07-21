@@ -120,8 +120,8 @@ class SelectableTable extends Table
             $this->selectedRow = $maxRow;
         }
 
-        $this->tableOutput->writeln('Use ↑/↓ arrows to navigate, Enter to select, q/Esc to exit');
-        $this->tableOutput->writeln('Selected Row: ' . ($this->selectedRow + 1) . '/' . count($this->originalRows));
+        $this->tableOutput->writeln(__('cli-table::table.instructions'));
+
         $this->tableOutput->writeln('');
 
         $styledRows = [];
@@ -198,7 +198,7 @@ class SelectableTable extends Table
                 case 'escape':
                     $this->disableRawMode();
                     system('clear');
-                    $this->tableOutput->writeln('Selection cancelled');
+                    $this->tableOutput->writeln(__('cli-table::table.selection_cancelled'));
                     $this->selectedRow = -1; // Indicate no selection
                     return;
             }
@@ -288,7 +288,6 @@ class SelectableTable extends Table
     public function selectRow(?callable $callback = null): mixed
     {
 		$this->render();
-//        $this->renderInteractive();
         
         if ($callback && $this->getSelectedRow()) {
             return $callback($this->getSelectedRow(), $this->getSelectedRowIndex());

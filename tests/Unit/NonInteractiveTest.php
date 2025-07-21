@@ -178,23 +178,25 @@ test('SelectableTable with style configuration', function () {
     expect($output->fetch())->toContain('John');
 });
 
-test('SelectableTable drawFullTable bounds safety', function () {
+test('SelectableTable selectedRow bounds checking', function () {
     $output = new BufferedOutput();
     $table = new SelectableTable($output);
     
     $table->setRows([['1', 'John'], ['2', 'Jane']]);
     
-    // Test negative selectedRow
+    // Test that selectedRow bounds are checked in getSelectedRow
     $reflection = new ReflectionClass($table);
     $property = $reflection->getProperty('selectedRow');
     $property->setAccessible(true);
     $property->setValue($table, -5);
     
-    $method = $reflection->getMethod('drawFullTable');
-    $method->setAccessible(true);
-    $method->invoke($table);
+    expect($table->getSelectedRow())->toBeNull(); // Out of bounds should return null
     
-    expect($property->getValue($table))->toBe(0); // Should be clamped to 0
+    $property->setValue($table, 10);
+    expect($table->getSelectedRow())->toBeNull(); // Out of bounds should return null
+    
+    $property->setValue($table, 1);
+    expect($table->getSelectedRow())->toBe(['2', 'Jane']); // Valid index should work
 });
 
 test('SelectableTable with mixed TableCell and string rows', function () {
