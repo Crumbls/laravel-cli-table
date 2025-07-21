@@ -90,14 +90,6 @@ $table->setSelectedForegroundColor('yellow');
 - **Escape**: Exit without selection
 - **Ctrl+C**: Force exit
 
-## Demo
-
-Run the included demo command to see it in action:
-
-```bash
-php artisan table:demo
-```
-
 ## Testing
 
 ```bash
