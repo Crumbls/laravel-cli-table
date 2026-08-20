@@ -33,6 +33,16 @@ test('SelectableTable non-interactive mode', function () {
 	expect($content)->toContain('Jane');
 });
 
+test('SelectableTable renders an empty table without waiting for input', function () {
+	$output = new BufferedOutput();
+	$table = new SelectableTable($output);
+
+	$table->setHeaders(['ID', 'Name']);
+	$table->render();
+
+	expect($output->fetch())->toContain('ID');
+});
+
 test('SelectableTable with TableCell objects', function () {
 	$output = new BufferedOutput();
 	$table = new SelectableTable($output);

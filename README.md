@@ -109,8 +109,7 @@ composer test-coverage
 ## Requirements
 
 - PHP ^8.2
-- Laravel ^12.0
-- Symfony Console ^7.2
+- Laravel ^12.0 or ^13.0
 
 ## Advanced Usage
 
@@ -205,8 +204,7 @@ USA
 ## Requirements
 
 - PHP ^8.2
-- Laravel ^12.0
-- Symfony Console ^7.2
+- Laravel ^12.0 or ^13.0
 
 ## License
 

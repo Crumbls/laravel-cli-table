@@ -22,6 +22,7 @@ class SelectableTable extends Table
 	private string $selectedBackgroundColor = 'cyan';
 	private string $selectedForegroundColor = 'black';
 	private ?int $originalConsoleMode = null;
+	private ?string $originalTerminalMode = null;
 	private TableStyle $tableStyle;
 
 	public function __construct(OutputInterface $output, $inputStream = null)
@@ -98,17 +99,23 @@ class SelectableTable extends Table
 
 	public function render(): void
 	{
-		if ($this->isInteractive) {
+		if ($this->isInteractive && $this->originalRows !== []) {
 			$this->drawFullTable();
 			$this->handleInput();
-		} else {
-			$renderTable = new Table($this->tableOutput);
-			if (!empty($this->originalHeaders)) {
-				$renderTable->setHeaders($this->originalHeaders);
-			}
-			$renderTable->setRows($this->originalRows);
-			$renderTable->render();
+			return;
 		}
+
+		$this->renderNonInteractiveTable();
+	}
+
+	private function renderNonInteractiveTable(): void
+	{
+		$renderTable = new Table($this->tableOutput);
+		if (!empty($this->originalHeaders)) {
+			$renderTable->setHeaders($this->originalHeaders);
+		}
+		$renderTable->setRows($this->originalRows);
+		$renderTable->render();
 	}
 
 	private function drawFullTable(): void
@@ -182,35 +189,47 @@ class SelectableTable extends Table
 	private function handleInput(): void
 	{
 		$this->enableRawMode();
-		
-		while (true) {
-			$key = $this->readKey();
-			switch ($key) {
-				case 'up': // Up arrow
-				    if ($this->selectedRow > 0) {
-				        $this->selectedRow--;
-				        $this->drawFullTable();
-				    }
-				    break;
-				    
-				case 'down': // Down arrow
-				    $maxRow = count($this->originalRows) - 1;
-				    if ($this->selectedRow < $maxRow) {
-				        $this->selectedRow++;
-				        $this->drawFullTable();
-				    }
-				    break;
-				case 'enter':
-				    $this->disableRawMode();
-				    $this->tableOutput->write(sprintf("\033\143"));
-				    return;
-				case 'escape':
-				    $this->disableRawMode();
-				    $this->tableOutput->write(sprintf("\033\143"));
-				    $this->tableOutput->writeln(__('cli-table::table.selection_cancelled'));
-				    $this->selectedRow = -1; // Indicate no selection
-				    return;
+
+		if (! $this->isInteractive) {
+			$this->renderNonInteractiveTable();
+
+			return;
+		}
+
+		try {
+			while (true) {
+				$key = $this->readKey();
+				switch ($key) {
+					case 'up':
+						if ($this->selectedRow > 0) {
+							$this->selectedRow--;
+							$this->drawFullTable();
+						}
+						break;
+
+					case 'down':
+						$maxRow = count($this->originalRows) - 1;
+						if ($this->selectedRow < $maxRow) {
+							$this->selectedRow++;
+							$this->drawFullTable();
+						}
+						break;
+
+					case 'enter':
+						$this->tableOutput->write("\033\143");
+
+						return;
+
+					case 'escape':
+						$this->tableOutput->write("\033\143");
+						$this->tableOutput->writeln(__('cli-table::table.selection_cancelled'));
+						$this->selectedRow = -1;
+
+						return;
+				}
 			}
+		} finally {
+			$this->disableRawMode();
 		}
 	}
 
@@ -219,10 +238,25 @@ class SelectableTable extends Table
 		if (PHP_OS_FAMILY === 'Windows') {
 			$this->enableWindowsRawMode();
 		} elseif (PHP_OS_FAMILY === 'Darwin' || PHP_OS_FAMILY === 'Linux') {
-			$result = null;
-			system('stty -icanon -echo 2>/dev/null', $result);
-			if ($result !== 0) {
-				// Fallback if stty fails - non-interactive mode
+			try {
+				$output = [];
+				$status = 1;
+				exec('stty -g 2>/dev/null', $output, $status);
+				$mode = trim(implode("\n", $output));
+
+				if ($status !== 0 || $mode === '') {
+					$this->isInteractive = false;
+
+					return;
+				}
+
+				system('stty -icanon -echo -isig 2>/dev/null', $status);
+				if ($status === 0) {
+					$this->originalTerminalMode = $mode;
+				} else {
+					$this->isInteractive = false;
+				}
+			} catch (\Throwable) {
 				$this->isInteractive = false;
 			}
 		}
@@ -232,9 +266,13 @@ class SelectableTable extends Table
 	{
 		if (PHP_OS_FAMILY === 'Windows') {
 			$this->disableWindowsRawMode();
-		} elseif (PHP_OS_FAMILY === 'Darwin' || PHP_OS_FAMILY === 'Linux') {
-			$result = null;
-			system('stty icanon echo 2>/dev/null', $result);
+		} elseif ((PHP_OS_FAMILY === 'Darwin' || PHP_OS_FAMILY === 'Linux') && $this->originalTerminalMode !== null) {
+			try {
+				$status = 1;
+				system('stty '.escapeshellarg($this->originalTerminalMode).' 2>/dev/null', $status);
+			} finally {
+				$this->originalTerminalMode = null;
+			}
 		}
 	}
 
@@ -261,7 +299,7 @@ class SelectableTable extends Table
 			/** @phpstan-ignore-next-line */
 			$handle = $ffi->GetStdHandle(-10); // STD_INPUT_HANDLE
 			/** @var FFI\CData $mode */
-			$mode = FFI::new('DWORD');
+			$mode = $ffi->new('DWORD');
 			
 			/** @var bool $result */
 			/** @phpstan-ignore-next-line */
@@ -279,7 +317,6 @@ class SelectableTable extends Table
 				$this->isInteractive = false;
 			}
 		} catch (\Throwable $e) {
-			// Fallback to non-interactive mode if FFI fails
 			$this->isInteractive = false;
 		}
 	}
@@ -307,14 +344,17 @@ class SelectableTable extends Table
 			/** @phpstan-ignore-next-line */
 			$ffi->SetConsoleMode($handle, $this->originalConsoleMode);
 			$this->originalConsoleMode = null;
-		} catch (\Throwable $e) {
-			// Ignore errors when restoring
+		} catch (\Throwable) {
+			// Restoring a terminal mode must never obscure the user's selection result.
 		}
 	}
 
 	private function readKey(): string
 	{
 		$c = fread($this->inputStream, self::READ_BUFFER_SIZE);
+		if ($c === false || $c === '') {
+			return 'escape';
+		}
 		
 		// Handle escape key
 		if ($c === "\e" || $c === "\033") {

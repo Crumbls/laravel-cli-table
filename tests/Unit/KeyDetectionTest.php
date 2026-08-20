@@ -126,3 +126,19 @@ test('readKey handles unrecognized input', function () {
 	expect($result)->toBe('');
 	fclose($stream);
 });
+
+test('readKey exits safely when the input stream ends', function () {
+	$output = new BufferedOutput();
+	$stream = fopen('php://memory', 'r+');
+	if ($stream === false) {
+		throw new RuntimeException('Failed to create memory stream');
+	}
+
+	$table = new SelectableTable($output, $stream);
+	$reflection = new ReflectionClass($table);
+	$method = $reflection->getMethod('readKey');
+	$method->setAccessible(true);
+
+	expect($method->invoke($table))->toBe('escape');
+	fclose($stream);
+});
